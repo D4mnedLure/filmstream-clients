@@ -1,0 +1,18 @@
+{
+  "name": "filmstream-tv",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "FilmStream TV client (Tizen web app, packaged to .wgt)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "wgt": "bash scripts/build-wgt.sh"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-legacy": "^5.4.3",
+    "terser": "^5.36.0",
+    "vite": "^5.4.11"
+  }
+}
