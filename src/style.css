@@ -64,3 +64,43 @@ html, body {
   transform: scale(1.04);
   box-shadow: 0 0 0 4px #6ea8ff;
 }
+
+/* Buttons */
+.btn {
+  background: #e8e8ee; color: #111; font-size: 30px; font-weight: 700;
+  padding: 18px 56px; border-radius: 14px; cursor: pointer;
+}
+
+/* ── Device-login screen ─────────────────────────────────────────────────── */
+.login .tagline { margin-bottom: 8px; }
+.login-grid {
+  display: flex; align-items: center; gap: 64px;
+  background: #15151f; border: 2px solid #262636; border-radius: 24px; padding: 48px 64px;
+}
+.qr { background: #fff; padding: 20px; border-radius: 16px; line-height: 0; }
+.qr img { width: 300px; height: 300px; image-rendering: pixelated; }
+.login-steps { display: flex; flex-direction: column; gap: 18px; }
+.step { font-size: 30px; color: #c8c8d6; display: flex; align-items: center; gap: 16px; }
+.step .num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 999px; background: #6ea8ff; color: #0b0b12;
+  font-size: 24px; font-weight: 800;
+}
+.verify-uri { font-size: 26px; color: #8a8aa0; margin-left: 56px; }
+.code-big {
+  font-size: 84px; font-weight: 800; letter-spacing: .12em; color: #6ea8ff;
+  margin-left: 56px; font-variant-numeric: tabular-nums;
+}
+
+/* ── Home screen ─────────────────────────────────────────────────────────── */
+.user-card {
+  display: flex; align-items: center; gap: 28px;
+  background: #15151f; border: 2px solid #262636; border-radius: 20px; padding: 28px 40px;
+}
+.avatar { width: 96px; height: 96px; border-radius: 999px; object-fit: cover; }
+.avatar.placeholder {
+  display: flex; align-items: center; justify-content: center;
+  background: #6ea8ff; color: #0b0b12; font-size: 44px; font-weight: 800;
+}
+.user-name { font-size: 38px; font-weight: 700; }
+.user-sub { font-size: 26px; color: #8a8aa0; }

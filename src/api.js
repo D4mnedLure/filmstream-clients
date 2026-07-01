@@ -25,6 +25,29 @@ export function checkAuth() {
   return probe(AUTH_BASE + '/health')
 }
 
+// ── Device Authorization Flow ──────────────────────────────────────────────
+
+export async function requestDeviceCode() {
+  const res = await fetch(AUTH_BASE + '/device/code', { method: 'POST', cache: 'no-store' })
+  if (!res.ok) throw new Error('device/code HTTP ' + res.status)
+  return res.json()
+}
+
+// Returns { status: 'ok'|'pending'|'expired'|'error', token?, error? }.
+export async function pollDeviceToken(deviceCode) {
+  const res = await fetch(AUTH_BASE + '/device/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'device_code=' + encodeURIComponent(deviceCode),
+    cache: 'no-store',
+  })
+  const data = await res.json().catch(() => ({}))
+  if (res.ok && data.access_token) return { status: 'ok', token: data.access_token }
+  if (data.error === 'authorization_pending') return { status: 'pending' }
+  if (data.error === 'expired_token') return { status: 'expired' }
+  return { status: 'error', error: data.error || 'HTTP ' + res.status }
+}
+
 // film-stream's backend isn't exposed unauthenticated except via /hls, which
 // returns 401 without a token — that 401 still proves the backend is reachable.
 export function checkFilm() {
