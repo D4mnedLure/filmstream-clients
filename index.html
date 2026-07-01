@@ -4,6 +4,31 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1920, height=1080, user-scalable=no" />
     <title>FilmStream TV</title>
+    <!-- Runs on the old TV engine even if the main bundle fails: surfaces the
+         error on-screen since this TV has device logging disabled. -->
+    <script>
+      window.onerror = function (msg, src, line, col) {
+        var a = document.getElementById('app')
+        if (a) {
+          a.innerHTML =
+            '<pre style="color:#f87171;font-size:22px;padding:40px;white-space:pre-wrap">' +
+            'JS ERROR: ' + msg + '\n' + (src || '') + ':' + line + ':' + col + '</pre>'
+        }
+        return false
+      }
+      window.addEventListener('unhandledrejection', function (e) {
+        window.onerror('unhandled promise: ' + ((e.reason && e.reason.message) || e.reason), '', 0, 0)
+      })
+      // Sentinel: if the bundle never rendered, say so instead of a black screen.
+      setTimeout(function () {
+        var a = document.getElementById('app')
+        if (a && a.innerHTML === '') {
+          a.innerHTML =
+            '<pre style="color:#fbbf24;font-size:22px;padding:40px;white-space:pre-wrap">' +
+            'Bundle did not execute (empty #app after 3s).\nUA: ' + navigator.userAgent + '</pre>'
+        }
+      }, 3000)
+    </script>
   </head>
   <body>
     <div id="app"></div>

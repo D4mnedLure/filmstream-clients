@@ -3,6 +3,11 @@
         id="http://filmstream.example.com/tv" version="0.1.0" viewmodes="maximized">
     <tizen:application id="FilmStrmTV.FilmStream" package="FilmStrmTV" required_version="2.4"/>
     <content src="index.html"/>
+    <!-- Tizen's default CSP is `script-src 'self'`, which blocks the legacy
+         (SystemJS) inline bootstrap and the bundled inline <style> — black
+         screen. Relax it: allow inline/eval for scripts+styles and let the app
+         reach the backends over the network. -->
+    <tizen:content-security-policy>default-src * data: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; img-src * data:; media-src *</tizen:content-security-policy>
     <feature name="http://tizen.org/feature/screen.size.all"/>
     <icon src="icon.png"/>
     <name>FilmStream</name>

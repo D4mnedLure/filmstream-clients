@@ -21,6 +21,12 @@ echo "==> stage Tizen manifest + icon into dist/"
 cp "$ROOT/tizen/config.xml" "$DIST/config.xml"
 cp "$ROOT/tizen/icon.png" "$DIST/icon.png"
 
+# The app loads from file:// on the TV, where a `crossorigin` script attribute
+# triggers a CORS check that file:// fails — the scripts then never execute
+# (black screen). Strip it.
+echo "==> strip crossorigin from index.html (file:// compat)"
+sed -i 's/ crossorigin//g' "$DIST/index.html"
+
 echo "==> package signed .wgt (profile: $TIZEN_PROFILE)"
 "$TIZEN_CLI" package -t wgt -s "$TIZEN_PROFILE" -- "$DIST"
 
