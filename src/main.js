@@ -1,51 +1,17 @@
 import './style.css'
 import { initRemote, exitApp } from './remote.js'
-import { currentUser, setToken, clearToken } from './auth.js'
-import { renderLogin } from './device.js'
-import { renderHome } from './home.js'
+import { currentUser } from './auth.js'
+import { key as routeKey, pop } from './router.js'
+import { go } from './flows.js'
 
-const app = document.getElementById('app')
-let cancelLogin = null
-
-function stopLogin() {
-  if (cancelLogin) {
-    cancelLogin()
-    cancelLogin = null
-  }
-}
-
-function showLogin() {
-  stopLogin()
-  cancelLogin = renderLogin(app, (token) => {
-    setToken(token)
-    showHome()
-  })
-}
-
-function showHome() {
-  stopLogin()
-  renderHome(app, () => {
-    clearToken()
-    showLogin()
-  })
-}
-
-function route() {
-  if (currentUser()) showHome()
-  else showLogin()
-}
-
-initRemote((key) => {
-  if (key === 'BACK') {
-    exitApp()
+initRemote((name) => {
+  if (name === 'BACK') {
+    // Pop the screen stack; at the root there's nothing to pop → exit.
+    if (!pop()) exitApp()
     return true
   }
-  if (key === 'ENTER') {
-    const el = document.querySelector('.focusable.focused')
-    if (el && el.click) el.click()
-    return true
-  }
-  return false
+  return routeKey(name)
 })
 
-route()
+if (currentUser()) go.home()
+else go.login()

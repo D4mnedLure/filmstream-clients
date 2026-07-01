@@ -1,4 +1,5 @@
-import { AUTH_BASE, FILM_BASE } from './config.js'
+import { AUTH_BASE, FILM_BASE, FILM_API_BASE } from './config.js'
+import { getToken } from './auth.js'
 
 // A reachability probe that survives missing CORS headers. A normal fetch
 // against a backend that hasn't whitelisted our origin yet throws (opaque to
@@ -52,4 +53,48 @@ export async function pollDeviceToken(deviceCode) {
 // returns 401 without a token — that 401 still proves the backend is reachable.
 export function checkFilm() {
   return probe(FILM_BASE + '/hls/1/master.m3u8')
+}
+
+// ── Catalog (via nginx /tv-api -> backend, JWT as ?token=) ─────────────────
+
+// Streams search results over SSE. Returns the EventSource so the caller can
+// close() it. Auth is via ?token= (EventSource can't set headers).
+export function searchStream(query, handlers) {
+  const url =
+    FILM_API_BASE + '/search/stream/' + encodeURIComponent(query) +
+    '?token=' + encodeURIComponent(getToken())
+  const es = new EventSource(url)
+  function done() {
+    es.close()
+    if (handlers.onDone) handlers.onDone()
+  }
+  es.onmessage = (e) => {
+    if (!e.data || e.data === 'close') return
+    let item
+    try {
+      item = JSON.parse(e.data)
+    } catch (_) {
+      return
+    }
+    if (item && item.error) {
+      if (handlers.onError) handlers.onError(item.error)
+    } else if (handlers.onItem) {
+      handlers.onItem(item)
+    }
+  }
+  es.addEventListener('close', done)
+  es.onerror = () => {
+    es.close()
+    if (handlers.onError) handlers.onError('stream error')
+  }
+  return es
+}
+
+export async function getMovie(kpId) {
+  const res = await fetch(
+    FILM_API_BASE + '/movie/' + kpId + '?token=' + encodeURIComponent(getToken()),
+    { cache: 'no-store' }
+  )
+  if (!res.ok) throw new Error('movie HTTP ' + res.status)
+  return res.json()
 }
