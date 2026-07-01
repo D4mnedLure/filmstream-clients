@@ -3,5 +3,10 @@
 export const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || 'https://auth.example.com'
 export const FILM_BASE = import.meta.env.VITE_FILM_BASE || 'https://film.example.com'
 
+// Data API (search/movie/translations) is exposed to the TV via nginx /tv-api
+// -> FastAPI backend directly (the web /api/* stays behind Next.js). HLS uses
+// FILM_BASE/hls directly. See deploy/nginx/film.example.com.conf.
+export const FILM_API_BASE = FILM_BASE + '/tv-api'
+
 // Where the JWT is persisted on the TV between launches.
 export const TOKEN_KEY = 'filmstream_jwt'
