@@ -108,5 +108,8 @@ export function hlsMasterUrl(kpId, translation, season, episode) {
     '?token=' + encodeURIComponent(getToken()) +
     '&translation=' + (translation || 0)
   if (season != null && episode != null) u += '&season=' + season + '&episode=' + episode
+  // Old Tizen AVPlay can't decode the source's CMAF/fMP4 audio; ask the backend
+  // to remux to MPEG-TS.
+  u += '&fmt=ts'
   return u
 }

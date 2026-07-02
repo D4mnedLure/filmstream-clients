@@ -48,11 +48,37 @@ export function createPlayerScreen(kpId, movie) {
     try { return fn() } catch (_) { return null }
   }
 
+  // Explicitly enable the first AUDIO track — Tizen sometimes prepares without
+  // it. (The backend already remuxes to MPEG-TS with a single AAC track.)
+  function selectAudio() {
+    const tracks = avSafe(() => AV.getTotalTrackInfo()) || []
+    for (let i = 0; i < tracks.length; i++) {
+      if (tracks[i].type === 'AUDIO') {
+        avSafe(() => AV.setSelectTrack('AUDIO', tracks[i].index))
+        return
+      }
+    }
+  }
+
+  function trLabel() {
+    for (let i = 0; i < translations.length; i++) {
+      if (translations[i].index === translation) return translations[i].label
+    }
+    return ''
+  }
+
   function start() {
     const url = hlsMasterUrl(kpId, translation, season, episode)
     if (!AV) {
       showError('AVPlay недоступен (запущено не на Tizen TV).\n' + url)
       return
+    }
+    // Reflect the active dub in the title (updates on translation switch).
+    const tl = app && app.querySelector('.po-title')
+    if (tl) {
+      tl.textContent = (movie.name || '') +
+        (isSeries && season != null ? ' · S' + season + 'E' + episode : '') +
+        (trLabel() ? ' · ' + trLabel() : '')
     }
     retried = false
     buffering = true
@@ -67,6 +93,8 @@ export function createPlayerScreen(kpId, movie) {
       // segments), then let ABR ramp up — otherwise AVPlay prebuffers a big
       // 1080p buffer before showing anything ("adski dolgo").
       avSafe(() => AV.setStreamingProperty('ADAPTIVE_INFO', 'STARTBITRATE=LOWEST|SKIPBITRATE=HIGHEST'))
+      // Start after a small buffer instead of AVPlay's large default prebuffer.
+      avSafe(() => AV.setBufferingParam('PLAYER_BUFFER_FOR_PLAY', 'PLAYER_BUFFER_SIZE_IN_SECOND', 2))
       AV.setListener({
         onbufferingstart: () => { buffering = true; updateBuffering() },
         onbufferingcomplete: () => { buffering = false; updateBuffering() },
@@ -77,6 +105,7 @@ export function createPlayerScreen(kpId, movie) {
       })
       AV.prepareAsync(function () {
         duration = avSafe(() => AV.getDuration()) || 0
+        selectAudio()
         try { AV.play(); playing = true } catch (e) { onAvError(e) }
         buffering = false
         updateBuffering()
