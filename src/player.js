@@ -63,6 +63,10 @@ export function createPlayerScreen(kpId, movie) {
       AV.open(url)
       AV.setDisplayRect(0, 0, 1920, 1080)
       avSafe(() => AV.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN'))
+      // Start at the lowest variant so playback begins fast (small first
+      // segments), then let ABR ramp up — otherwise AVPlay prebuffers a big
+      // 1080p buffer before showing anything ("adski dolgo").
+      avSafe(() => AV.setStreamingProperty('ADAPTIVE_INFO', 'STARTBITRATE=LOWEST|SKIPBITRATE=HIGHEST'))
       AV.setListener({
         onbufferingstart: () => { buffering = true; updateBuffering() },
         onbufferingcomplete: () => { buffering = false; updateBuffering() },
@@ -231,7 +235,7 @@ export function createPlayerScreen(kpId, movie) {
     const title = esc(movie.name || '') + (isSeries && season != null ? ' · S' + season + 'E' + episode : '')
     app.innerHTML =
       '<object id="av-player" type="application/avplayer"></object>' +
-      '<div id="buf" class="buffering"><div class="spinner"></div></div>' +
+      '<div id="buf" class="buffering"><div class="spinner"></div><div class="buf-label">Загрузка…</div></div>' +
       '<div id="overlay" class="player-overlay">' +
       '  <div class="po-title">' + title + '</div>' +
       '  <div class="po-bar"><div id="p-bar-fill" class="po-bar-fill"></div></div>' +
