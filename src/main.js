@@ -6,7 +6,9 @@ import { go } from './flows.js'
 
 initRemote((name) => {
   if (name === 'BACK') {
-    // Pop the screen stack; at the root there's nothing to pop → exit.
+    // Give the current screen a chance first (e.g. close an open overlay),
+    // then pop the stack; at the root there's nothing to pop → exit.
+    if (routeKey('BACK')) return true
     if (!pop()) exitApp()
     return true
   }

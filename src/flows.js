@@ -6,10 +6,12 @@ import { createHomeScreen } from './home.js'
 import { createLoginScreen } from './login.js'
 import { createSearchScreen } from './search.js'
 import { createDetailScreen } from './detail.js'
+import { createPlayerScreen } from './player.js'
 
 export const go = {
   home: () => reset(createHomeScreen()),
   login: () => reset(createLoginScreen()),
   search: () => push(createSearchScreen()),
   detail: (kpId) => push(createDetailScreen(kpId)),
+  play: (kpId, movie) => push(createPlayerScreen(kpId, movie)),
 }
