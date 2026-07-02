@@ -9,6 +9,11 @@ export const KEYS = {
   BACK: 10009, // Tizen Return/Back
   EXIT: 10182,
   MEDIA_PLAY_PAUSE: 10252,
+  MEDIA_PLAY: 415,
+  MEDIA_PAUSE: 19,
+  MEDIA_STOP: 413,
+  MEDIA_FF: 417,
+  MEDIA_RW: 412,
 }
 
 const CODE_TO_NAME = Object.keys(KEYS).reduce((acc, name) => {
@@ -17,7 +22,10 @@ const CODE_TO_NAME = Object.keys(KEYS).reduce((acc, name) => {
 }, {})
 
 // Extra keys the platform only delivers after explicit registration.
-const REGISTER = ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop']
+const REGISTER = [
+  'MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop',
+  'MediaFastForward', 'MediaRewind',
+]
 
 export function exitApp() {
   try {

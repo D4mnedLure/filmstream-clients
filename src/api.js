@@ -98,3 +98,15 @@ export async function getMovie(kpId) {
   if (!res.ok) throw new Error('movie HTTP ' + res.status)
   return res.json()
 }
+
+// HLS master URL for AVPlay. JWT rides as ?token= (AVPlay can't set headers);
+// the backend propagates it into segments. /hls is proxied straight to the
+// backend by nginx, so use FILM_BASE (not FILM_API_BASE).
+export function hlsMasterUrl(kpId, translation, season, episode) {
+  let u =
+    FILM_BASE + '/hls/' + kpId + '/master.m3u8' +
+    '?token=' + encodeURIComponent(getToken()) +
+    '&translation=' + (translation || 0)
+  if (season != null && episode != null) u += '&season=' + season + '&episode=' + episode
+  return u
+}

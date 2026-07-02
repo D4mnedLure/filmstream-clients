@@ -1,5 +1,6 @@
 import { getMovie } from './api.js'
 import { createFocus } from './nav.js'
+import { go } from './flows.js'
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -61,11 +62,7 @@ export function createDetailScreen(kpId) {
     focus.focusFirst()
     const watch = app.querySelector('#watch')
     if (watch) {
-      watch.onclick = () => {
-        // Player lands in M6 — acknowledge on-screen for now.
-        const hint = app.querySelector('#d-hint')
-        if (hint) hint.innerHTML = 'Плеер (AVPlay) появится в <b>M6</b>'
-      }
+      watch.onclick = () => go.play(kpId, data)
     }
   }
 
