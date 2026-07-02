@@ -6,13 +6,18 @@
 #
 # Env overrides:
 #   TIZEN_CLI       path to the tizen CLI   (default: ~/tizen-studio/tools/ide/bin/tizen)
-#   TIZEN_PROFILE   signing profile name    (default: filmstream-tv)
+#   TIZEN_PROFILE   signing profile name    (default: FilmSream-Partner)
+#
+# Signing profile is personal to the machine/developer. Default is the Samsung
+# Partner distributor profile (grants partner-level privileges, e.g. future
+# DRM); a Public profile works too for non-privileged builds — override with
+# TIZEN_PROFILE. Either way the distributor cert must whitelist the TV's DUID.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$ROOT/dist"
 TIZEN_CLI="${TIZEN_CLI:-$HOME/tizen-studio/tools/ide/bin/tizen}"
-TIZEN_PROFILE="${TIZEN_PROFILE:-filmstream-tv}"
+TIZEN_PROFILE="${TIZEN_PROFILE:-FilmSream-Partner}"
 
 echo "==> vite build"
 npm --prefix "$ROOT" run build
