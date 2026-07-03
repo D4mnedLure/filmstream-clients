@@ -18,15 +18,20 @@ export function createHomeScreen() {
     app.innerHTML =
       '<div class="screen">' +
       '  <div class="logo">Film<span class="accent">Stream</span> TV</div>' +
-      '  <div class="user-card">' + avatar +
+      '  <div id="go-account" class="user-card focusable" tabindex="0">' + avatar +
       '    <div class="user-meta"><div class="user-name">' + esc(u.name) + '</div>' +
       '      <div class="user-sub">' + esc(u.sub) + '</div></div></div>' +
-      '  <div id="go-search" class="btn focusable" tabindex="0">🔍 Поиск фильмов</div>' +
+      '  <div id="go-search" class="btn focusable" tabindex="0">' +
+      '    <svg class="btn-ico" viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>' +
+      '    Поиск фильмов</div>' +
+      '  <div id="go-account-btn" class="btn ghost focusable" tabindex="0">Личный кабинет</div>' +
       '  <div id="logout" class="btn ghost focusable" tabindex="0">Выйти</div>' +
       '  <div class="hint">Пульт: <b>OK</b> — выбрать · <b>Back</b> — закрыть</div>' +
       '</div>'
 
     app.querySelector('#go-search').onclick = () => go.search()
+    app.querySelector('#go-account').onclick = () => go.account()
+    app.querySelector('#go-account-btn').onclick = () => go.account()
     app.querySelector('#logout').onclick = () => { clearToken(); go.login() }
 
     focus = createFocus(app)

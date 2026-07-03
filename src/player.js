@@ -1,4 +1,4 @@
-import { hlsMasterUrl } from './api.js'
+import { hlsMasterUrl, sendProgress } from './api.js'
 import { currentUser } from './auth.js'
 import { createFocus } from './nav.js'
 import { go } from './flows.js'
@@ -18,8 +18,9 @@ function fmt(ms) {
   return (h > 0 ? h + ':' + pad(m) : m) + ':' + pad(s)
 }
 
-// movie: detail payload { name, is_series, seasons:[{season,episodes:[]}], translations:[{index,label}] }
-export function createPlayerScreen(kpId, movie) {
+// movie: detail payload { name, poster, is_series, seasons:[{season,episodes:[]}], translations:[{index,label}] }
+// resume (optional): { translation, season, episode, position_sec } to jump in.
+export function createPlayerScreen(kpId, movie, resume) {
   movie = movie || {}
   const isSeries = !!movie.is_series
   const translations = movie.translations && movie.translations.length ? movie.translations : [{ index: 0, label: 'Оригинал' }]
@@ -32,6 +33,13 @@ export function createPlayerScreen(kpId, movie) {
     season = seasons[0].season
     episode = seasons[0].episodes && seasons[0].episodes.length ? seasons[0].episodes[0] : 1
   }
+  // Apply resume selection (translation/episode) so we re-open where the user left off.
+  if (resume) {
+    if (resume.translation != null) translation = resume.translation
+    if (isSeries && resume.season != null) { season = resume.season; episode = resume.episode }
+  }
+  // Seek applied once, on the first successful prepare (not on episode switches).
+  let pendingSeekMs = resume && resume.position_sec ? resume.position_sec * 1000 : 0
 
   let app = null
   let playing = false
@@ -39,9 +47,28 @@ export function createPlayerScreen(kpId, movie) {
   let duration = 0
   let currentTime = 0
   let overlayTimer = null
+  let hbTimer = null
   let menuOpen = false
   let menuFocus = null
   let retried = false
+
+  // ── Progress heartbeat (личный кабинет: cross-device resume) ────────────────
+  function progressBody() {
+    return {
+      kp_id: kpId,
+      season: season || 0,
+      episode: episode || 0,
+      position_sec: Math.floor(currentTime / 1000),
+      duration_sec: Math.floor(duration / 1000),
+      translation: translation || 0,
+      title: movie.name || '',
+      poster: movie.poster || '',
+      is_series: isSeries,
+    }
+  }
+  function heartbeat() {
+    if (duration > 0 && currentTime > 0) sendProgress(progressBody())
+  }
 
   // ── AVPlay ────────────────────────────────────────────────────────────────
   function avSafe(fn) {
@@ -106,6 +133,12 @@ export function createPlayerScreen(kpId, movie) {
       AV.prepareAsync(function () {
         duration = avSafe(() => AV.getDuration()) || 0
         selectAudio()
+        // Resume: jump to the saved position once, if it's a sane offset.
+        if (pendingSeekMs > 2000 && (!duration || pendingSeekMs < duration - 10000)) {
+          avSafe(() => (AV.seekTo ? AV.seekTo(pendingSeekMs) : AV.jumpForward(pendingSeekMs)))
+          currentTime = pendingSeekMs
+        }
+        pendingSeekMs = 0
         try { AV.play(); playing = true } catch (e) { onAvError(e) }
         buffering = false
         updateBuffering()
@@ -126,6 +159,7 @@ export function createPlayerScreen(kpId, movie) {
   }
 
   function onCompleted() {
+    heartbeat() // position ≈ duration → backend marks it completed
     const nxt = nextEpisode()
     if (nxt) { season = nxt.season; episode = nxt.episode; start(); return }
     playing = false
@@ -157,7 +191,7 @@ export function createPlayerScreen(kpId, movie) {
   // ── Controls ────────────────────────────────────────────────────────────────
   function togglePlay() {
     if (!AV) return
-    if (playing) { avSafe(() => AV.pause()); playing = false }
+    if (playing) { avSafe(() => AV.pause()); playing = false; heartbeat() }
     else { avSafe(() => AV.play()); playing = true }
     showOverlay()
   }
@@ -277,11 +311,14 @@ export function createPlayerScreen(kpId, movie) {
     const menu = app.querySelector('#menu')
     if (menu) menu.style.display = 'none'
     document.documentElement.classList.add('avplay')
+    hbTimer = setInterval(heartbeat, 15000)
     start()
   }
 
   function dispose() {
     if (overlayTimer) clearTimeout(overlayTimer)
+    if (hbTimer) { clearInterval(hbTimer); hbTimer = null }
+    heartbeat() // save the final position on exit
     stopAv()
     document.documentElement.classList.remove('avplay')
   }

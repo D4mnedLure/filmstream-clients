@@ -99,6 +99,52 @@ export async function getMovie(kpId) {
   return res.json()
 }
 
+// ── Account / личный кабинет (via /tv-api/me -> backend /api/me) ────────────
+// The backend account cabinet (profile, settings, progress, library, history)
+// already exists; the TV client just calls it with the JWT as ?token=. All
+// helpers append the token to the query since AVPlay/EventSource aside, we keep
+// a single auth channel for TV.
+
+function meUrl(path, params) {
+  let u = FILM_API_BASE + '/me' + (path || '') + '?token=' + encodeURIComponent(getToken())
+  if (params) {
+    for (const k in params) {
+      if (params[k] != null) u += '&' + k + '=' + encodeURIComponent(params[k])
+    }
+  }
+  return u
+}
+
+async function meFetch(path, opts, params) {
+  const init = Object.assign({ cache: 'no-store' }, opts || {})
+  if (init.body != null && typeof init.body !== 'string') {
+    init.headers = Object.assign({ 'Content-Type': 'application/json' }, init.headers)
+    init.body = JSON.stringify(init.body)
+  }
+  const res = await fetch(meUrl(path, params), init)
+  if (!res.ok) throw new Error('me' + (path || '') + ' HTTP ' + res.status)
+  if (res.status === 204) return null
+  return res.json().catch(() => null)
+}
+
+export function getProfile() { return meFetch('') }
+export function getContinue(limit) { return meFetch('/continue', null, { limit: limit || 20 }) }
+export function getProgressFor(kpId) { return meFetch('/progress/' + kpId) }
+export function saveProgress(body) { return meFetch('/progress', { method: 'PUT', body }) }
+export function deleteProgress(kpId) { return meFetch('/progress/' + kpId, { method: 'DELETE' }) }
+export function getLibrary(status, limit) { return meFetch('/library', null, { status, limit: limit || 60 }) }
+export function addLibrary(body) { return meFetch('/library', { method: 'POST', body }) }
+export function removeLibrary(kpId, status) { return meFetch('/library/' + kpId, { method: 'DELETE' }, { status }) }
+export function getLibraryState(kpId) { return meFetch('/library/state/' + kpId) }
+export function getHistory(limit) { return meFetch('/history', null, { limit: limit || 50 }) }
+export function getSettings() { return meFetch('/settings') }
+export function putSettings(body) { return meFetch('/settings', { method: 'PUT', body }) }
+
+// Fire-and-forget progress heartbeat: never throw into the player.
+export function sendProgress(body) {
+  try { saveProgress(body).catch(() => {}) } catch (_) {}
+}
+
 // HLS master URL for AVPlay. JWT rides as ?token= (AVPlay can't set headers);
 // the backend propagates it into segments. /hls is proxied straight to the
 // backend by nginx, so use FILM_BASE (not FILM_API_BASE).
