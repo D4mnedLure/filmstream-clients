@@ -99,6 +99,17 @@ export async function getMovie(kpId) {
   return res.json()
 }
 
+// Curated home rows (popular films/series, top250). Returns [{title, slug, items}].
+export async function getHome() {
+  const res = await fetch(
+    FILM_API_BASE + '/home?token=' + encodeURIComponent(getToken()),
+    { cache: 'no-store' }
+  )
+  if (!res.ok) throw new Error('home HTTP ' + res.status)
+  const data = await res.json()
+  return (data && data.rows) || []
+}
+
 // ── Account / личный кабинет (via /tv-api/me -> backend /api/me) ────────────
 // The backend account cabinet (profile, settings, progress, library, history)
 // already exists; the TV client just calls it with the JWT as ?token=. All
