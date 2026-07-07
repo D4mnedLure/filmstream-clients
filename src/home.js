@@ -34,7 +34,7 @@ function rowHtml(title, items, withProgress) {
   for (let i = 0; i < items.length; i++) cards += cardHtml(items[i], withProgress)
   return (
     '<div class="hrow-wrap"><div class="row-title">' + esc(title) + '</div>' +
-    '<div class="hrow">' + cards + '</div></div>'
+    '<div class="hrow" data-scroll="x"><div class="hrow-inner">' + cards + '</div></div></div>'
   )
 }
 
@@ -59,8 +59,7 @@ export function createHomeScreen() {
       '  <div id="go-search" class="home-search focusable" tabindex="0">' +
       '    <svg class="btn-ico" viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>' +
       '    Поиск фильмов и сериалов</div>' +
-      '  <div id="rows" class="home-rows"><div class="muted">Загрузка…</div></div>' +
-      '  <div class="hint">Пульт: <b>OK</b> — выбрать · <b>Back</b> — выход</div>' +
+      '  <div id="rows" class="home-rows" data-scroll="y"><div class="muted">Загрузка…</div></div>' +
       '</div>'
 
     app.querySelector('#go-account').onclick = () => go.account()
@@ -96,7 +95,7 @@ export function createHomeScreen() {
 
     const rows = app && app.querySelector('#rows')
     if (!rows) return
-    rows.innerHTML = html
+    rows.innerHTML = '<div class="home-rows-inner">' + html + '</div>'
     const cards = Array.prototype.slice.call(rows.querySelectorAll('.card[data-kp]'))
     for (let i = 0; i < cards.length; i++) {
       cards[i].onclick = (function (kp) { return function () { go.detail(kp) } })(+cards[i].getAttribute('data-kp'))
