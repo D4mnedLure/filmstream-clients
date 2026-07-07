@@ -80,6 +80,11 @@ export function initRemote(handler) {
   document.addEventListener('keydown', (e) => {
     const name = CODE_TO_NAME[e.keyCode]
     if (!name) return
+    // Kill the platform's own D-pad handling: Android TV WebViews run native
+    // spatial navigation with their own geometry and click the *natively*
+    // focused element on OK — which may differ from our visual focus ring
+    // (seen on Sber: OK activated the key one row above the ring).
+    if (e.preventDefault) e.preventDefault()
     const handled = handler ? handler(name, e) : false
     if (name === 'BACK' && !handled) {
       exitApp()

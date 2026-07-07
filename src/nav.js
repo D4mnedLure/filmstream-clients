@@ -103,6 +103,16 @@ export function createFocus(root) {
     const el = items[current]
     if (el) {
       el.classList.add('focused')
+      // Keep the native DOM focus on the same element as our visual ring, so
+      // any platform-synthesized OK-click hits what the user actually sees.
+      // Skip on Tizen: focus() there scrolls containers and fights the
+      // transform-based scrolling.
+      if (!(window.webapis && window.webapis.avplay)) {
+        if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1')
+        try { el.focus({ preventScroll: true }) } catch (_) {
+          try { el.focus() } catch (_) {}
+        }
+      }
       ensureVisible(el)
     }
   }
