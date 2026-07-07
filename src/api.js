@@ -156,17 +156,17 @@ export function sendProgress(body) {
   try { saveProgress(body).catch(() => {}) } catch (_) {}
 }
 
-// HLS master URL for AVPlay. JWT rides as ?token= (AVPlay can't set headers);
-// the backend propagates it into segments. /hls is proxied straight to the
-// backend by nginx, so use FILM_BASE (not FILM_API_BASE).
-export function hlsMasterUrl(kpId, translation, season, episode) {
+// HLS master URL for the player. JWT rides as ?token= (TV players can't set
+// headers); the backend propagates it into segments. /hls is proxied straight
+// to the backend by nginx, so use FILM_BASE (not FILM_API_BASE).
+// `ts` — old Tizen AVPlay can't decode the source's CMAF/fMP4 audio, so it asks
+// the backend to remux to MPEG-TS; modern engines (hls.js) skip it.
+export function hlsMasterUrl(kpId, translation, season, episode, ts) {
   let u =
     FILM_BASE + '/hls/' + kpId + '/master.m3u8' +
     '?token=' + encodeURIComponent(getToken()) +
     '&translation=' + (translation || 0)
   if (season != null && episode != null) u += '&season=' + season + '&episode=' + episode
-  // Old Tizen AVPlay can't decode the source's CMAF/fMP4 audio; ask the backend
-  // to remux to MPEG-TS.
-  u += '&fmt=ts'
+  if (ts) u += '&fmt=ts'
   return u
 }

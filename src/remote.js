@@ -20,6 +20,10 @@ const CODE_TO_NAME = Object.keys(KEYS).reduce((acc, name) => {
   acc[KEYS[name]] = name
   return acc
 }, {})
+// Non-Tizen aliases: Escape → BACK (desktop browser / some Android remotes),
+// 179 → play/pause (Android TV WebView media key).
+CODE_TO_NAME[27] = 'BACK'
+CODE_TO_NAME[179] = 'MEDIA_PLAY_PAUSE'
 
 // Extra keys the platform only delivers after explicit registration.
 const REGISTER = [
@@ -31,10 +35,16 @@ export function exitApp() {
   try {
     // eslint-disable-next-line no-undef
     tizen.application.getCurrentApplication().exit()
-  } catch (_) {
-    // In a desktop browser (dev) there's no tizen namespace — just no-op.
-    window.close()
-  }
+    return
+  } catch (_) {}
+  try {
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+      import('@capacitor/app').then((m) => m.App.exitApp()).catch(() => {})
+      return
+    }
+  } catch (_) {}
+  // Desktop browser (dev) — best effort.
+  window.close()
 }
 
 // Register a handler that receives semantic key names ("UP", "ENTER", …).
@@ -49,6 +59,21 @@ export function initRemote(handler) {
           tizen.tvinputdevice.registerKey(k)
         } catch (_) {}
       })
+    }
+  } catch (_) {}
+
+  // Android (Capacitor): the hardware Back key never reaches the DOM — it fires
+  // the App plugin's backButton event instead. Dynamic import so the Tizen
+  // build never evaluates @capacitor code (its plugin proxies need ES2015+).
+  try {
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+      import('@capacitor/app')
+        .then((m) => {
+          m.App.addListener('backButton', () => {
+            if (handler) handler('BACK', null)
+          })
+        })
+        .catch(() => {})
     }
   } catch (_) {}
 

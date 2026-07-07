@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FilmStream</string>
+    <string name="title_activity_main">FilmStream</string>
+    <string name="package_name">me.flieith.filmstream</string>
+    <string name="custom_url_scheme">me.flieith.filmstream</string>
+</resources>

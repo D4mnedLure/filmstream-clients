@@ -3,6 +3,9 @@ import { currentUser } from './auth.js'
 import { createFocus } from './nav.js'
 import { go } from './flows.js'
 
+// Tizen exposes webapis.avplay (hardware player behind the page). Everywhere
+// else (Android WebView / desktop browser) we use <video> + hls.js — modern
+// engines decode the source CMAF/fMP4 natively, so no fmt=ts remux either.
 const AV = (typeof window !== 'undefined' && window.webapis && window.webapis.avplay) || null
 
 function esc(s) {
@@ -16,6 +19,155 @@ function fmt(ms) {
   const s = t % 60
   const pad = (n) => (n < 10 ? '0' + n : '' + n)
   return (h > 0 ? h + ':' + pad(m) : m) + ':' + pad(s)
+}
+
+function avSafe(fn) {
+  try { return fn() } catch (_) { return null }
+}
+
+// ── Engines ──────────────────────────────────────────────────────────────────
+// Interface: html() → markup for render; load(url, seekMs); play(); pause();
+// seekBy(deltaMs); stop(). Events arrive via the shared `ev` callbacks:
+// onTime(ms), onDuration(ms), onBuffering(bool), onEnded(), onError(e), onReady().
+
+function createAvplayEngine(ev) {
+  function selectAudio() {
+    // Tizen sometimes prepares without the audio track enabled — select it.
+    const tracks = avSafe(() => AV.getTotalTrackInfo()) || []
+    for (let i = 0; i < tracks.length; i++) {
+      if (tracks[i].type === 'AUDIO') {
+        avSafe(() => AV.setSelectTrack('AUDIO', tracks[i].index))
+        return
+      }
+    }
+  }
+  return {
+    html: () => '<object id="av-player" type="application/avplayer"></object>',
+    load(url, seekMs) {
+      avSafe(() => AV.stop())
+      avSafe(() => AV.close())
+      AV.open(url)
+      AV.setDisplayRect(0, 0, 1920, 1080)
+      avSafe(() => AV.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN'))
+      // Start at the lowest variant + small buffer for a fast first frame.
+      avSafe(() => AV.setStreamingProperty('ADAPTIVE_INFO', 'STARTBITRATE=LOWEST|SKIPBITRATE=HIGHEST'))
+      avSafe(() => AV.setBufferingParam('PLAYER_BUFFER_FOR_PLAY', 'PLAYER_BUFFER_SIZE_IN_SECOND', 2))
+      AV.setListener({
+        onbufferingstart: () => ev.onBuffering(true),
+        onbufferingcomplete: () => ev.onBuffering(false),
+        oncurrentplaytime: (ms) => ev.onTime(ms),
+        onstreamcompleted: () => ev.onEnded(),
+        onerror: (e) => ev.onError(e),
+        onevent: () => {},
+      })
+      AV.prepareAsync(function () {
+        const duration = avSafe(() => AV.getDuration()) || 0
+        ev.onDuration(duration)
+        selectAudio()
+        if (seekMs > 2000 && (!duration || seekMs < duration - 10000)) {
+          avSafe(() => (AV.seekTo ? AV.seekTo(seekMs) : AV.jumpForward(seekMs)))
+          ev.onTime(seekMs)
+        }
+        try { AV.play() } catch (e) { ev.onError(e); return }
+        ev.onReady()
+      }, function (e) { ev.onError(e) })
+    },
+    play: () => avSafe(() => AV.play()),
+    pause: () => avSafe(() => AV.pause()),
+    seekBy(deltaMs) {
+      if (deltaMs >= 0) avSafe(() => AV.jumpForward(deltaMs))
+      else avSafe(() => AV.jumpBackward(-deltaMs))
+    },
+    stop() {
+      avSafe(() => AV.stop())
+      avSafe(() => AV.close())
+    },
+  }
+}
+
+function createHtml5Engine(ev) {
+  let video = null
+  let hls = null
+
+  function bind(v) {
+    v.addEventListener('timeupdate', () => ev.onTime(v.currentTime * 1000))
+    v.addEventListener('durationchange', () => {
+      if (isFinite(v.duration)) ev.onDuration(v.duration * 1000)
+    })
+    v.addEventListener('waiting', () => ev.onBuffering(true))
+    v.addEventListener('playing', () => ev.onBuffering(false))
+    v.addEventListener('canplay', () => ev.onBuffering(false))
+    v.addEventListener('ended', () => ev.onEnded())
+    v.addEventListener('error', () => ev.onError(v.error))
+  }
+
+  return {
+    html: () => '<video id="html5-player" autoplay playsinline></video>',
+    load(url, seekMs) {
+      if (hls) { hls.destroy(); hls = null }
+      video = document.getElementById('html5-player')
+      if (!video) { ev.onError(new Error('no video element')); return }
+      if (!video._bound) { bind(video); video._bound = true }
+      const seekOnce = function () {
+        if (seekMs > 2000 && (!video.duration || seekMs / 1000 < video.duration - 10)) {
+          video.currentTime = seekMs / 1000
+        }
+      }
+      // hls.js is loaded lazily so the Tizen bundle (AVPlay path) never parses
+      // its ~0.5 MB on the old TV engine.
+      import('hls.js')
+        .then((mod) => {
+          const Hls = mod.default || mod
+          if (Hls.isSupported()) {
+            hls = new Hls({ maxBufferLength: 30 })
+            hls.on(Hls.Events.MANIFEST_PARSED, function () {
+              seekOnce()
+              const p = video.play()
+              if (p && p.catch) p.catch(() => {})
+              ev.onReady()
+            })
+            hls.on(Hls.Events.ERROR, function (_e, data) {
+              if (!data.fatal) return
+              // One transparent recovery for network/media hiccups, then bail.
+              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad()
+              else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError()
+              else ev.onError(data)
+            })
+            hls.loadSource(url)
+            hls.attachMedia(video)
+          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = url
+            video.addEventListener('loadedmetadata', function once() {
+              video.removeEventListener('loadedmetadata', once)
+              seekOnce()
+              const p = video.play()
+              if (p && p.catch) p.catch(() => {})
+              ev.onReady()
+            })
+          } else {
+            ev.onError(new Error('HLS не поддерживается этим устройством'))
+          }
+        })
+        .catch((e) => ev.onError(e))
+    },
+    play() { if (video) { const p = video.play(); if (p && p.catch) p.catch(() => {}) } },
+    pause() { if (video) video.pause() },
+    seekBy(deltaMs) {
+      if (!video) return
+      let t = video.currentTime + deltaMs / 1000
+      if (t < 0) t = 0
+      if (video.duration && t > video.duration - 1) t = video.duration - 1
+      video.currentTime = t
+    },
+    stop() {
+      if (hls) { hls.destroy(); hls = null }
+      if (video) {
+        video.pause()
+        video.removeAttribute('src')
+        try { video.load() } catch (_) {}
+      }
+    },
+  }
 }
 
 // movie: detail payload { name, poster, is_series, seasons:[{season,episodes:[]}], translations:[{index,label}] }
@@ -52,6 +204,21 @@ export function createPlayerScreen(kpId, movie, resume) {
   let menuFocus = null
   let retried = false
 
+  const engine = (AV ? createAvplayEngine : createHtml5Engine)({
+    onTime: (ms) => { currentTime = ms; updateProgress() },
+    onDuration: (ms) => { duration = ms; updateProgress() },
+    onBuffering: (b) => { buffering = b; updateBuffering() },
+    onEnded: () => onCompleted(),
+    onError: (e) => onPlayError(e),
+    onReady: () => {
+      playing = true
+      buffering = false
+      updateBuffering()
+      updateProgress()
+      showOverlay()
+    },
+  })
+
   // ── Progress heartbeat (личный кабинет: cross-device resume) ────────────────
   function progressBody() {
     return {
@@ -70,23 +237,6 @@ export function createPlayerScreen(kpId, movie, resume) {
     if (duration > 0 && currentTime > 0) sendProgress(progressBody())
   }
 
-  // ── AVPlay ────────────────────────────────────────────────────────────────
-  function avSafe(fn) {
-    try { return fn() } catch (_) { return null }
-  }
-
-  // Explicitly enable the first AUDIO track — Tizen sometimes prepares without
-  // it. (The backend already remuxes to MPEG-TS with a single AAC track.)
-  function selectAudio() {
-    const tracks = avSafe(() => AV.getTotalTrackInfo()) || []
-    for (let i = 0; i < tracks.length; i++) {
-      if (tracks[i].type === 'AUDIO') {
-        avSafe(() => AV.setSelectTrack('AUDIO', tracks[i].index))
-        return
-      }
-    }
-  }
-
   function trLabel() {
     for (let i = 0; i < translations.length; i++) {
       if (translations[i].index === translation) return translations[i].label
@@ -95,11 +245,9 @@ export function createPlayerScreen(kpId, movie, resume) {
   }
 
   function start() {
-    const url = hlsMasterUrl(kpId, translation, season, episode)
-    if (!AV) {
-      showError('AVPlay недоступен (запущено не на Tizen TV).\n' + url)
-      return
-    }
+    // Tizen AVPlay can't decode the source CMAF audio → ask for the MPEG-TS
+    // remux. Modern engines (hls.js) play the original fMP4 as-is.
+    const url = hlsMasterUrl(kpId, translation, season, episode, !!AV)
     // Reflect the active dub in the title (updates on translation switch).
     const tl = app && app.querySelector('.po-title')
     if (tl) {
@@ -109,50 +257,20 @@ export function createPlayerScreen(kpId, movie, resume) {
     }
     retried = false
     buffering = true
+    playing = false
     updateBuffering()
-    avSafe(() => AV.stop())
-    avSafe(() => AV.close())
     try {
-      AV.open(url)
-      AV.setDisplayRect(0, 0, 1920, 1080)
-      avSafe(() => AV.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN'))
-      // Start at the lowest variant so playback begins fast (small first
-      // segments), then let ABR ramp up — otherwise AVPlay prebuffers a big
-      // 1080p buffer before showing anything ("adski dolgo").
-      avSafe(() => AV.setStreamingProperty('ADAPTIVE_INFO', 'STARTBITRATE=LOWEST|SKIPBITRATE=HIGHEST'))
-      // Start after a small buffer instead of AVPlay's large default prebuffer.
-      avSafe(() => AV.setBufferingParam('PLAYER_BUFFER_FOR_PLAY', 'PLAYER_BUFFER_SIZE_IN_SECOND', 2))
-      AV.setListener({
-        onbufferingstart: () => { buffering = true; updateBuffering() },
-        onbufferingcomplete: () => { buffering = false; updateBuffering() },
-        oncurrentplaytime: (ms) => { currentTime = ms; updateProgress() },
-        onstreamcompleted: () => onCompleted(),
-        onerror: (e) => onAvError(e),
-        onevent: () => {},
-      })
-      AV.prepareAsync(function () {
-        duration = avSafe(() => AV.getDuration()) || 0
-        selectAudio()
-        // Resume: jump to the saved position once, if it's a sane offset.
-        if (pendingSeekMs > 2000 && (!duration || pendingSeekMs < duration - 10000)) {
-          avSafe(() => (AV.seekTo ? AV.seekTo(pendingSeekMs) : AV.jumpForward(pendingSeekMs)))
-          currentTime = pendingSeekMs
-        }
-        pendingSeekMs = 0
-        try { AV.play(); playing = true } catch (e) { onAvError(e) }
-        buffering = false
-        updateBuffering()
-        updateProgress()
-        showOverlay()
-      }, function (e) { onAvError(e) })
+      engine.load(url, pendingSeekMs)
     } catch (e) {
-      showError('Ошибка AVPlay: ' + ((e && e.message) || e))
+      showError('Ошибка плеера: ' + ((e && e.message) || e))
+      return
     }
+    pendingSeekMs = 0
   }
 
-  function onAvError() {
-    // A dead JWT makes every segment 401 -> AVPlay errors. Bounce to login.
-    if (!currentUser()) { stopAv(); go.login(); return }
+  function onPlayError() {
+    // A dead JWT makes every segment 401 -> player errors. Bounce to login.
+    if (!currentUser()) { engine.stop(); go.login(); return }
     // Otherwise try one clean re-open (covers a stale CDN session).
     if (!retried) { retried = true; start(); return }
     showError('Ошибка воспроизведения. Нажмите Back и попробуйте снова.')
@@ -164,11 +282,6 @@ export function createPlayerScreen(kpId, movie, resume) {
     if (nxt) { season = nxt.season; episode = nxt.episode; start(); return }
     playing = false
     showOverlay(true)
-  }
-
-  function stopAv() {
-    avSafe(() => AV && AV.stop())
-    avSafe(() => AV && AV.close())
   }
 
   // ── Series episode helpers ──────────────────────────────────────────────────
@@ -190,22 +303,19 @@ export function createPlayerScreen(kpId, movie, resume) {
 
   // ── Controls ────────────────────────────────────────────────────────────────
   function togglePlay() {
-    if (!AV) return
-    if (playing) { avSafe(() => AV.pause()); playing = false; heartbeat() }
-    else { avSafe(() => AV.play()); playing = true }
+    if (playing) { engine.pause(); playing = false; heartbeat() }
+    else { engine.play(); playing = true }
     showOverlay()
   }
   function seek(deltaMs) {
-    if (!AV) return
-    if (deltaMs >= 0) avSafe(() => AV.jumpForward(deltaMs))
-    else avSafe(() => AV.jumpBackward(-deltaMs))
+    engine.seekBy(deltaMs)
     showOverlay()
   }
 
   // ── Overlay / rendering ─────────────────────────────────────────────────────
   function showError(msg) {
     if (!app) return
-    app.innerHTML = '<div class="screen"><div class="tagline" style="color:#f87171;white-space:pre-wrap">' + esc(msg) + '</div><div class="hint">Back — назад</div></div>'
+    app.innerHTML = '<div class="screen"><div class="tagline" style="color:#d9736a;white-space:pre-wrap">' + esc(msg) + '</div><div class="hint">Back — назад</div></div>'
   }
 
   function updateBuffering() {
@@ -297,7 +407,7 @@ export function createPlayerScreen(kpId, movie, resume) {
     app = container
     const title = esc(movie.name || '') + (isSeries && season != null ? ' · S' + season + 'E' + episode : '')
     app.innerHTML =
-      '<object id="av-player" type="application/avplayer"></object>' +
+      engine.html() +
       '<div id="buf" class="buffering"><div class="spinner"></div><div class="buf-label">Загрузка…</div></div>' +
       '<div id="overlay" class="player-overlay">' +
       '  <div class="po-title">' + title + '</div>' +
@@ -310,7 +420,8 @@ export function createPlayerScreen(kpId, movie, resume) {
       menuHtml()
     const menu = app.querySelector('#menu')
     if (menu) menu.style.display = 'none'
-    document.documentElement.classList.add('avplay')
+    // On Tizen the video plane is BEHIND the page — the page must go transparent.
+    if (AV) document.documentElement.classList.add('avplay')
     hbTimer = setInterval(heartbeat, 15000)
     start()
   }
@@ -319,7 +430,7 @@ export function createPlayerScreen(kpId, movie, resume) {
     if (overlayTimer) clearTimeout(overlayTimer)
     if (hbTimer) { clearInterval(hbTimer); hbTimer = null }
     heartbeat() // save the final position on exit
-    stopAv()
+    engine.stop()
     document.documentElement.classList.remove('avplay')
   }
 
@@ -351,7 +462,7 @@ export function createPlayerScreen(kpId, movie, resume) {
       case 'DOWN':
         showOverlay(); return true
       case 'BACK':
-        return false // let main pop -> dispose() stops AVPlay
+        return false // let main pop -> dispose() stops the engine
       default:
         return false
     }

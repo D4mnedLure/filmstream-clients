@@ -241,6 +241,8 @@ html, body {
    transparent while playing so it shows through. */
 html.avplay, html.avplay body { background: transparent; }
 #av-player { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; }
+/* HTML5 engine (Android/desktop): the video is an in-page element. */
+#html5-player { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; background: #000; object-fit: contain; }
 
 .buffering {
   position: absolute; top: 0; left: 0; width: 100%; height: 100%;
