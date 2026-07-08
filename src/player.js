@@ -85,7 +85,7 @@ function createAvplayEngine(ev) {
   }
 }
 
-function createHtml5Engine(ev) {
+export function createHtml5Engine(ev) {
   let video = null
   let hls = null
 

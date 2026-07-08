@@ -1,10 +1,14 @@
+import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import legacy from '@vitejs/plugin-legacy'
 
-// The target TV (Samsung M5513, Tizen 3.0) runs Chromium ~47, which has no
-// ES-module support. plugin-legacy emits a SystemJS/nomodule bundle that runs
-// there; renderModernChunks:false keeps ONLY that bundle (single old target).
-// base:'./' makes asset URLs relative — the .wgt loads from file:// on the TV.
+// Two entries, one codebase:
+//  - index.html  — TV UI (Tizen/Android TV). Samsung M5513 runs Chromium ~47
+//    with no ES-module support, so plugin-legacy emits a SystemJS bundle;
+//    renderModernChunks:false keeps only that bundle (it runs everywhere).
+//  - mobile.html — iPhone/Android phone PWA (touch UI, same api/auth modules).
+// base:'./' keeps asset URLs relative — the .wgt loads from file:// on the TV
+// and the mobile build is served under a sub-path (/m/).
 export default defineConfig({
   base: './',
   plugins: [
@@ -19,6 +23,12 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        mobile: resolve(__dirname, 'mobile.html'),
+      },
+    },
   },
   server: { host: true, port: 5173 },
 })
