@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launch window background referenced by AppTheme.NoActionBarLaunch.
+     Kept as a plain solid dark fill so the project builds without a bundled
+     splash asset; swap for a layer-list with a centered logo if desired. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#101014" />
+</shape>
