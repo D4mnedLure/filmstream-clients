@@ -40,10 +40,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build web bundle (vite)
+      # Inject endpoints obfuscated (base64 of the reversed URL) so the real
+      # domains never appear as plaintext in the shipped bundle. config.js
+      # decodes them at runtime. This only defeats static extraction, not
+      # traffic inspection.
+      - name: Obfuscate endpoints
         env:
-          VITE_FILM_BASE: ${{ secrets.VITE_FILM_BASE }}
-          VITE_AUTH_BASE: ${{ secrets.VITE_AUTH_BASE }}
+          FILM: ${{ secrets.VITE_FILM_BASE }}
+          AUTH: ${{ secrets.VITE_AUTH_BASE }}
+        run: |
+          echo "VITE_FILM_BASE_ENC=$(printf '%s' "$FILM" | rev | tr -d '\n' | base64 -w0)" >> "$GITHUB_ENV"
+          echo "VITE_AUTH_BASE_ENC=$(printf '%s' "$AUTH" | rev | tr -d '\n' | base64 -w0)" >> "$GITHUB_ENV"
+
+      - name: Build web bundle (vite)
         run: npm run build
 
       - name: Sync web assets into Android project
