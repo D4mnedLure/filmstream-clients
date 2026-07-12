@@ -133,6 +133,46 @@ html, body {
 }
 .chip-name { font-size: 28px; font-weight: 600; }
 
+/* Update bell (top-right, shown only when a newer APK is available) */
+.topbar-right { display: flex; align-items: center; }
+.topbar-right > * + * { margin-left: 22px; }
+.bell {
+  position: relative; cursor: pointer; color: #d7d1c6;
+  display: flex; align-items: center; justify-content: center;
+  width: 72px; height: 72px; border-radius: 999px;
+  background: #201e1b; border: 2px solid #343029;
+}
+.bell.hidden { display: none; }
+.bell.has-update { color: #f0d9c8; }
+.bell-badge {
+  position: absolute; top: 12px; right: 12px;
+  width: 16px; height: 16px; border-radius: 999px;
+  background: #cc785c; border: 3px solid #14120f;
+}
+
+/* Update dialog */
+.up-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 9, 8, 0.72);
+}
+.up-overlay.hidden { display: none; }
+.up-dialog {
+  width: 760px; background: #201e1b; border: 2px solid #343029; border-radius: 24px;
+  padding: 56px 64px; text-align: center;
+}
+.up-title { font-size: 44px; font-weight: 800; }
+.up-ver { font-size: 30px; color: #cc785c; font-weight: 700; margin-top: 12px; }
+.up-msg { font-size: 30px; color: #d7d1c6; margin-top: 24px; }
+.up-actions { display: flex; justify-content: center; margin-top: 48px; }
+.up-actions > * + * { margin-left: 28px; }
+.up-btn {
+  font-size: 32px; font-weight: 700; padding: 20px 56px; border-radius: 14px;
+  background: #2b2823; color: #d7d1c6; border: 2px solid #3a352e; cursor: pointer;
+}
+.up-btn.up-primary { background: #cc785c; color: #fff; border-color: #cc785c; }
+.up-btn.focused { transform: scale(1.05); box-shadow: 0 0 0 4px #cc785c; }
+
 .home-search {
   align-self: center; width: 940px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;

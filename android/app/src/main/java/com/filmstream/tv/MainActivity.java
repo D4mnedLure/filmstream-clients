@@ -8,6 +8,9 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Local plugin for in-app APK self-update. Must be registered before
+        // super.onCreate() loads the Capacitor bridge.
+        registerPlugin(ApkUpdaterPlugin.class);
         super.onCreate(savedInstanceState);
 
         WebSettings settings = this.bridge.getWebView().getSettings();
