@@ -41,10 +41,9 @@ jobs:
         run: npm ci
 
       # Inject endpoints obfuscated (base64 of the reversed URL) so the real
-      # domains never appear as plaintext in the shipped bundle. config.js
-      # decodes them at runtime. This only defeats static extraction, not
-      # traffic inspection.
-      - name: Obfuscate endpoints
+      # domains never appear as plaintext in the source that gets built.
+      # config.js decodes them at runtime.
+      - name: Inject obfuscated endpoints
         env:
           FILM: ${{ secrets.VITE_FILM_BASE }}
           AUTH: ${{ secrets.VITE_AUTH_BASE }}
@@ -52,8 +51,11 @@ jobs:
           echo "VITE_FILM_BASE_ENC=$(printf '%s' "$FILM" | rev | tr -d '\n' | base64 -w0)" >> "$GITHUB_ENV"
           echo "VITE_AUTH_BASE_ENC=$(printf '%s' "$AUTH" | rev | tr -d '\n' | base64 -w0)" >> "$GITHUB_ENV"
 
-      - name: Build web bundle (vite)
-        run: npm run build
+      # build:apk = vite build + whole-bundle JS obfuscation (Android only; the
+      # Tizen .wgt uses the plain `build`). Hardens the public APK against
+      # static analysis; endpoints are still visible in live traffic.
+      - name: Build & obfuscate web bundle
+        run: npm run build:apk
 
       - name: Sync web assets into Android project
         run: npx cap sync android
