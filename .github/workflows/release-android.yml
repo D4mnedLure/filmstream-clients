@@ -41,6 +41,9 @@ jobs:
         run: npm ci
 
       - name: Build web bundle (vite)
+        env:
+          VITE_FILM_BASE: ${{ secrets.VITE_FILM_BASE }}
+          VITE_AUTH_BASE: ${{ secrets.VITE_AUTH_BASE }}
         run: npm run build
 
       - name: Sync web assets into Android project
