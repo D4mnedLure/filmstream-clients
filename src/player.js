@@ -88,6 +88,7 @@ function createAvplayEngine(ev) {
 export function createHtml5Engine(ev) {
   let video = null
   let hls = null
+  let hlsRetryTimer = null
 
   function bind(v) {
     v.addEventListener('timeupdate', () => ev.onTime(v.currentTime * 1000))
@@ -104,7 +105,15 @@ export function createHtml5Engine(ev) {
   return {
     html: () => '<video id="html5-player" autoplay playsinline></video>',
     load(url, seekMs) {
+      if (hlsRetryTimer) { clearTimeout(hlsRetryTimer); hlsRetryTimer = null }
       if (hls) { hls.destroy(); hls = null }
+      // Cap on hls.js's own network-error recovery, with backoff. Without this a
+      // stream the backend can't serve (blocked CDN / dead resolve) makes hls.js
+      // hammer the master playlist as fast as each request fails — which in turn
+      // re-triggers the backend resolver against the external API. 3 tries, then
+      // bubble to onError so the player shows a real failure instead of looping.
+      const MAX_NET_RETRIES = 3
+      let netRetries = 0
       video = document.getElementById('html5-player')
       if (!video) { ev.onError(new Error('no video element')); return }
       if (!video._bound) { bind(video); video._bound = true }
@@ -121,6 +130,7 @@ export function createHtml5Engine(ev) {
           if (Hls.isSupported()) {
             hls = new Hls({ maxBufferLength: 30 })
             hls.on(Hls.Events.MANIFEST_PARSED, function () {
+              netRetries = 0 // fresh budget once the stream is actually playing
               seekOnce()
               const p = video.play()
               if (p && p.catch) p.catch(() => {})
@@ -128,10 +138,20 @@ export function createHtml5Engine(ev) {
             })
             hls.on(Hls.Events.ERROR, function (_e, data) {
               if (!data.fatal) return
-              // One transparent recovery for network/media hiccups, then bail.
-              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad()
-              else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError()
-              else ev.onError(data)
+              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                // Backoff (1s, 2s, 3s) then give up — never a tight retry loop.
+                if (netRetries >= MAX_NET_RETRIES) { ev.onError(data); return }
+                netRetries++
+                if (hlsRetryTimer) clearTimeout(hlsRetryTimer)
+                hlsRetryTimer = setTimeout(function () {
+                  hlsRetryTimer = null
+                  if (hls) hls.startLoad()
+                }, 1000 * netRetries)
+              } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                hls.recoverMediaError()
+              } else {
+                ev.onError(data)
+              }
             })
             hls.loadSource(url)
             hls.attachMedia(video)
@@ -160,6 +180,7 @@ export function createHtml5Engine(ev) {
       video.currentTime = t
     },
     stop() {
+      if (hlsRetryTimer) { clearTimeout(hlsRetryTimer); hlsRetryTimer = null }
       if (hls) { hls.destroy(); hls = null }
       if (video) {
         video.pause()
@@ -203,6 +224,7 @@ export function createPlayerScreen(kpId, movie, resume) {
   let menuOpen = false
   let menuFocus = null
   let retried = false
+  let retryTimer = null
 
   const engine = (AV ? createAvplayEngine : createHtml5Engine)({
     onTime: (ms) => { currentTime = ms; updateProgress() },
@@ -244,7 +266,13 @@ export function createPlayerScreen(kpId, movie, resume) {
     return ''
   }
 
-  function start() {
+  // isRetry=true is the single error-recovery re-open; it must NOT clear the
+  // `retried` guard, otherwise every playback error re-arms the retry and the
+  // player loops forever, spamming the backend (and the external API behind it).
+  // Fresh starts (initial load, episode/translation switch, next episode) pass
+  // no arg and legitimately reset the guard.
+  function start(isRetry) {
+    if (!isRetry) retried = false
     // Tizen AVPlay can't decode the source CMAF audio → ask for the MPEG-TS
     // remux. Modern engines (hls.js) play the original fMP4 as-is.
     const url = hlsMasterUrl(kpId, translation, season, episode, !!AV)
@@ -255,7 +283,6 @@ export function createPlayerScreen(kpId, movie, resume) {
         (isSeries && season != null ? ' · S' + season + 'E' + episode : '') +
         (trLabel() ? ' · ' + trLabel() : '')
     }
-    retried = false
     buffering = true
     playing = false
     updateBuffering()
@@ -271,8 +298,14 @@ export function createPlayerScreen(kpId, movie, resume) {
   function onPlayError() {
     // A dead JWT makes every segment 401 -> player errors. Bounce to login.
     if (!currentUser()) { engine.stop(); go.login(); return }
-    // Otherwise try one clean re-open (covers a stale CDN session).
-    if (!retried) { retried = true; start(); return }
+    // Otherwise try ONE clean re-open (covers a stale CDN session), after a
+    // short delay so a hard failure can't turn into a tight reload loop.
+    if (!retried) {
+      retried = true
+      if (retryTimer) clearTimeout(retryTimer)
+      retryTimer = setTimeout(function () { retryTimer = null; start(true) }, 3000)
+      return
+    }
     showError('Ошибка воспроизведения. Нажмите Back и попробуйте снова.')
   }
 
@@ -428,6 +461,7 @@ export function createPlayerScreen(kpId, movie, resume) {
 
   function dispose() {
     if (overlayTimer) clearTimeout(overlayTimer)
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null }
     if (hbTimer) { clearInterval(hbTimer); hbTimer = null }
     heartbeat() // save the final position on exit
     engine.stop()
