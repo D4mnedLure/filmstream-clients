@@ -8,13 +8,15 @@ name: Build & release Android
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-android
+  group: release-android-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -67,6 +69,7 @@ jobs:
           ls -la out
 
       - name: Publish GitHub Release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.version }}-b${{ github.run_number }}

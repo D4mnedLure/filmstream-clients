@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android TV leanback launcher banner (android:banner in the manifest).
+     Placeholder: dark card with a play glyph. Replace with a 320x180 branded
+     banner (e.g. res/drawable-xhdpi/tv_banner.png) when artwork is ready. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path android:fillColor="#101014" android:pathData="M0,0h320v180H0z" />
+    <path android:fillColor="#E50914" android:pathData="M140,66 L188,90 L140,114 Z" />
+</vector>
