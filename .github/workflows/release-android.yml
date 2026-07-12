@@ -1,0 +1,79 @@
+name: Build & release Android
+
+# On merge to main: build the web bundle, sync it into the Capacitor Android
+# project, assemble a debug-signed APK (installable directly on Android / Sber
+# TV, no keystore secrets needed), and publish it as a GitHub Release.
+# Runs on GitHub-hosted ubuntu-latest (Android SDK 35 preinstalled).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-android
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web bundle (vite)
+        run: npm run build
+
+      - name: Sync web assets into Android project
+        run: npx cap sync android
+
+      - name: Point Gradle at the runner SDK & accept licenses
+        run: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          chmod +x android/gradlew
+
+      - name: Assemble debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Compute version metadata
+        id: ver
+        run: |
+          V=$(node -p "require('./package.json').version")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Stage renamed APK
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+             "out/filmstream-tv-${{ steps.ver.outputs.version }}-b${{ github.run_number }}.apk"
+          ls -la out
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}-b${{ github.run_number }}
+          name: v${{ steps.ver.outputs.version }} (build ${{ github.run_number }})
+          body: |
+            Automated Android build from commit ${{ steps.ver.outputs.sha }}.
+
+            **filmstream-tv-*.apk** — debug-signed Android TV / mobile APK, installable directly (enable "unknown sources").
+          files: out/*.apk
+          fail_on_unmatched_files: true
