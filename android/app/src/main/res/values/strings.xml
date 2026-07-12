@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">FilmStream</string>
     <string name="title_activity_main">FilmStream</string>
-    <string name="package_name">me.flieith.filmstream</string>
-    <string name="custom_url_scheme">me.flieith.filmstream</string>
+    <string name="package_name">com.filmstream.tv</string>
+    <string name="custom_url_scheme">com.filmstream.tv</string>
 </resources>

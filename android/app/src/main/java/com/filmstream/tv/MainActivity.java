@@ -1,4 +1,4 @@
-package me.flieith.filmstream;
+package com.filmstream.tv;
 
 import android.os.Bundle;
 import android.webkit.WebSettings;
