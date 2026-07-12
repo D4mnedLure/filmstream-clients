@@ -1,11 +1,12 @@
-// Backends the TV talks to directly (see docs/TIZEN_TV_APP_MILESTONE.md).
-// Overridable at build time via Vite env (VITE_AUTH_BASE / VITE_FILM_BASE).
+// Backends the client talks to. Set these at build time via Vite env
+// (VITE_AUTH_BASE / VITE_FILM_BASE) — see .env.example. The placeholders below
+// are only so the app builds/runs without a configured backend; real
+// deployments inject the values (CI reads them from repository secrets).
 export const AUTH_BASE = import.meta.env.VITE_AUTH_BASE || 'https://auth.example.com'
 export const FILM_BASE = import.meta.env.VITE_FILM_BASE || 'https://film.example.com'
 
-// Data API (search/movie/translations) is exposed to the TV via nginx /tv-api
-// -> FastAPI backend directly (the web /api/* stays behind Next.js). HLS uses
-// FILM_BASE/hls directly. See deploy/nginx/film.example.com.conf.
+// Data API (search/movie/translations) is exposed to the client via the nginx
+// /tv-api prefix -> FastAPI backend directly. HLS uses FILM_BASE/hls directly.
 export const FILM_API_BASE = FILM_BASE + '/tv-api'
 
 // Where the JWT is persisted on the TV between launches.

@@ -1,6 +1,6 @@
 // Phone auth: standard redirect flow against the auth-service (the device
 // flow is for TVs — on the phone we ARE the browser).
-//   login() → auth.example.com/authorize?redirect_uri=<this page>&state=<hash>
+//   login() → AUTH_BASE/authorize?redirect_uri=<this page>&state=<hash>
 //   …OAuth… → back here with ?code= → POST /token → JWT in localStorage.
 import { AUTH_BASE } from '../config.js'
 import { setToken } from '../auth.js'

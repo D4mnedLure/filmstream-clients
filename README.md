@@ -1,7 +1,7 @@
 # filmstream-clients
 
-TV and mobile clients for [FilmStream](https://film.example.com). One Vite
-codebase, three targets:
+TV and mobile clients for a FilmStream backend. One Vite codebase, three
+targets:
 
 | Target | Entry | Packaging |
 |--------|-------|-----------|
@@ -84,11 +84,11 @@ Grab the latest APK from the [Releases page](../../releases).
 
 ## Backend contract
 
-These clients talk to the FilmStream backend at `film.example.com` over the
-`/tv-api/` (rewrites to backend `/api/`) and `/hls/` prefixes. TV clients can't
-set an `Authorization` header, so they pass the JWT as `?token=<JWT>` on every
-request. The backend keeps the server side of this contract; the backend +
-auth live in the separate `Film-stream` repo.
+These clients talk to a FilmStream backend (configured via `VITE_FILM_BASE` /
+`VITE_AUTH_BASE`, see [.env.example](.env.example)) over the `/tv-api/`
+(rewrites to backend `/api/`) and `/hls/` prefixes. TV clients can't set an
+`Authorization` header, so they pass the JWT as `?token=<JWT>` on every
+request. The backend keeps the server side of this contract.
 
 ## Layout
 

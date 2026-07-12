@@ -2,3 +2,8 @@ node_modules/
 dist/
 *.wgt
 .DS_Store
+
+# Local backend config — never commit real endpoints (see .env.example)
+.env
+.env.*
+!.env.example
