@@ -107,13 +107,16 @@ export function createHtml5Engine(ev) {
     load(url, seekMs) {
       if (hlsRetryTimer) { clearTimeout(hlsRetryTimer); hlsRetryTimer = null }
       if (hls) { hls.destroy(); hls = null }
-      // Cap on hls.js's own network-error recovery, with backoff. Without this a
-      // stream the backend can't serve (blocked CDN / dead resolve) makes hls.js
-      // hammer the master playlist as fast as each request fails — which in turn
-      // re-triggers the backend resolver against the external API. 3 tries, then
-      // bubble to onError so the player shows a real failure instead of looping.
-      const MAX_NET_RETRIES = 3
-      let netRetries = 0
+      // Cap on hls.js's fatal-error recovery, with backoff. Without this a stream
+      // the backend can't serve (blocked CDN / dead resolve) makes hls.js hammer
+      // the master playlist as fast as each request fails — which re-triggers the
+      // backend resolver against the external API. One budget covers BOTH network
+      // and media errors (a 403 segment redirected to the master m3u8 arrives as
+      // bad media, not a network error), and it only resets on real playback
+      // progress (FRAG_BUFFERED) — NOT on MANIFEST_PARSED, which fires on every
+      // master reload and would refill the budget each loop. 3 tries, then bubble.
+      const MAX_RETRIES = 3
+      let retries = 0
       video = document.getElementById('html5-player')
       if (!video) { ev.onError(new Error('no video element')); return }
       if (!video._bound) { bind(video); video._bound = true }
@@ -130,28 +133,32 @@ export function createHtml5Engine(ev) {
           if (Hls.isSupported()) {
             hls = new Hls({ maxBufferLength: 30 })
             hls.on(Hls.Events.MANIFEST_PARSED, function () {
-              netRetries = 0 // fresh budget once the stream is actually playing
               seekOnce()
               const p = video.play()
               if (p && p.catch) p.catch(() => {})
               ev.onReady()
             })
+            // Real playback progress — a fragment actually buffered. Only here is
+            // it safe to refill the retry budget (MANIFEST_PARSED fires on every
+            // failed-loop master reload and would never let the cap bite).
+            hls.on(Hls.Events.FRAG_BUFFERED, function () { retries = 0 })
             hls.on(Hls.Events.ERROR, function (_e, data) {
               if (!data.fatal) return
-              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                // Backoff (1s, 2s, 3s) then give up — never a tight retry loop.
-                if (netRetries >= MAX_NET_RETRIES) { ev.onError(data); return }
-                netRetries++
-                if (hlsRetryTimer) clearTimeout(hlsRetryTimer)
-                hlsRetryTimer = setTimeout(function () {
-                  hlsRetryTimer = null
-                  if (hls) hls.startLoad()
-                }, 1000 * netRetries)
-              } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-                hls.recoverMediaError()
-              } else {
-                ev.onError(data)
+              const type = data.type
+              // Only network/media errors are recoverable; others bubble at once.
+              if (type !== Hls.ErrorTypes.NETWORK_ERROR && type !== Hls.ErrorTypes.MEDIA_ERROR) {
+                ev.onError(data); return
               }
+              // Backoff (1s, 2s, 3s) then give up — never a tight retry loop.
+              if (retries >= MAX_RETRIES) { ev.onError(data); return }
+              retries++
+              if (hlsRetryTimer) clearTimeout(hlsRetryTimer)
+              hlsRetryTimer = setTimeout(function () {
+                hlsRetryTimer = null
+                if (!hls) return
+                if (type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError()
+                else hls.startLoad()
+              }, 1000 * retries)
             })
             hls.loadSource(url)
             hls.attachMedia(video)
